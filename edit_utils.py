@@ -1,11 +1,9 @@
 from collections import Counter
-import networkx as nx
 from math import floor, ceil
 import pandas as pd
-import progressbar
 from time import time
-import editdistance
 from numpy import argsort
+from verification import verification, neds
 
 def find_record(no, final_collection):
     return [ind for ind, r in enumerate(final_collection) if r[0] == no][0]
@@ -240,8 +238,6 @@ def post_joint(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_to
       
     total = util_gathered + sum_stopped
     
-    #print(total)
-    
     for (tok, tok_info) in tokens:
         if tok in idx[S]:
             total -= tok_info['utility']
@@ -249,46 +245,14 @@ def post_joint(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_to
             tok_info_S = idx[S][tok]
             minLen = min(len(tok_info['utilities_2']), len(tok_info_S['utilities_2'])) - 1
             util_score = min(tok_info['utilities_2'][minLen], tok_info_S['utilities_2'][minLen])
-            #print(R, S, tok, tok_info['utilities'][minLen], tok_info_S['utilities'][minLen], tok_info['utility'])
-            #print("\t", tok)
-            #print("\t", tok_info)
-            #print("\t", tok_info_S)
-            #util_score = tok_info['utility']
             total += util_score
 
-            #if pers_delta - total2 > .0000001:
-            #    print(R, S, tok, tok_info['utilities'][minLen], tok_info_S['utilities'][minLen], tok_info['utility'])
-        
-        #print(pers_delta, total)
         if pers_delta - total > .0000001:
             return total
         
     return total    
 
-def neds(r, s):
-    return 1 -editdistance.eval(r, s) / max((len(r), len(s)))
 
-def verification(R_record, S_record):
-    edges = []
-    for nor, r in enumerate(R_record):
-        for nos, s in enumerate(S_record):
-            edges.append((f'r_{nor}', f's_{nos}', neds(r, s)))
-    # print(edges)
-
-    G = nx.Graph()
-    G.add_weighted_edges_from(edges)
-
-    #print(G)
-    #print(nx.max_weight_matching(G))
-
-    matching = 0
-    for e in nx.max_weight_matching(G):
-        matching += G.edges[e]['weight']
-    #     print(e, G.edges[e]['weight'])
-    # print(matching)
-
-    score = matching / (len(R_record) + len(S_record) - matching)
-    return score
 
 
 
@@ -296,12 +260,6 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
 
     selfjoin = collection1 == collection2
     
-    
-    # print(collection1['collection'][18])
-    # print(collection1['qcollection'][18])
-    # print(collection2['collection'][20])
-    # print(collection2['qcollection'][20])
-
     init_time = candgen_time = candref_time = candver_time = 0
     no_candgen = no_candref = no_candver = no_candres = 0
     output = []
@@ -327,7 +285,6 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
                                             collection1['words'][R])
         
         tokens = sorted(tokens.items(), key=lambda x: x[0])
-        #tokens = sorted(idx[R].items(), key=lambda x: x[0])
         sum_stopped = RLen
         
         RLen_max = floor(RLen / delta)
@@ -346,16 +303,9 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         cands_scores = {}
         ## Starting Candidate Generation ##
         
-        # for pos_tok, (tok, tok_info) in enumerate(tokens):
-        #     print(tok, tok_info['utility'])
-        
         for pos_tok, (tok, tok_info) in enumerate(tokens):
-            # print("\t", pos_tok, tok, tok_info['utility'], "\t\t", theta, sum_stopped)
-            # print(pos_tok, tok)
             if theta - sum_stopped > 0.0000001:
                 break
-            
-            
             
             if tok_info['utility'] == 0: #not qchunk
                 continue
@@ -365,19 +315,10 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
             if selfjoin:
                 true_min = binary_search(lengths_list[tok], R)
                 
-                # print("\t", pos_tok, tok, true_min)
-                # print("\t", lengths_list[tok])
-                # print("\t", lengths_list[tok][true_min:])
-               
                 for S in lengths_list[tok][true_min:]:
-                    # print("\t\t", S, len(collection2['words'][S]), RLen_max)
                     
                     if R == S:
                         continue
-                    
-                    # if S!=478:
-                    #     continue
-                        
                     
                     if len(collection2['words'][S]) > RLen_max:
                         break
@@ -406,9 +347,8 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
                         cands_scores[S] = 0
                     cands_scores[S] += tok_info['utility']        
                 '''
-                
                 for S in lengths_list[tok]:
-                    if RLen_min > len(collection2['words'][S][1]) > RLen_max:
+                    if RLen_min > len(collection2['words'][S]) > RLen_max:
                         continue
 
                     if S not in cands_scores:
@@ -421,13 +361,6 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         candgen_time += t2-t1
         no_candgen += len(cands_scores)
         
-        # print(cands_scores)
-        
-        # if R == 0:
-        #     print("\t", cands_scores)
-        #    print(R_rec)
-        #    print(collection[3])
-        
         ## Starting Candidate Refinement ##
         for S, util_gathered in cands_scores.items():
             t1 = time()
@@ -435,27 +368,8 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
             S_rec = collection2['words'][S]
             SLen = len(S_rec)
 
-
-
-            # print(collection1['collection'][R])
-            # print(collection1['qcollection'][R])
-            # print(collection1['words'][R])
-            # print(collection2['collection'][S])
-            # print(collection2['qcollection'][S])
-            # print(collection2['words'][S])
-
-
-
             pers_delta = delta / (1.0 + delta) * (RLen + SLen);
             total = sum_stopped + util_gathered
-
-            #print("\t\t", RLen, SLen)
-            # print("\t\t", S, total, pers_delta)
-            
-            #print(R_id, S_id, pers_delta, total)
-            #if R_id == 0 and S_id == 16:
-            #    print(RLen, SLen)
-            
 
             if pers_delta - total > .0000001:
                 t2 = time()
@@ -471,8 +385,6 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
             else:
                 UB = post_basic(R, S, tokens, idx, pers_delta, total, pos_tok)
 
-            # print("\t\t", S, UB, pers_delta)
-
             if pers_delta - UB > .0000001:
                 t2 = time()
                 candref_time += t2-t1                
@@ -480,14 +392,12 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
 
             no_candver += 1
             
-            # print("\n", R_id, S_id, "\n", )
-                
             t1 = time()
             #score = verification(R_rec, S_rec)
             if RLen < SLen:
-                score = verification(R_rec, S_rec)
+                score = verification(R_rec, S_rec, neds, pers_delta)
             else:
-                score = verification(S_rec, R_rec)
+                score = verification(S_rec, R_rec, neds, pers_delta)
             t2 = time()
             candver_time += t2-t1
 
@@ -497,7 +407,6 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
             no_candres += 1
             output.append((R_id, S_id, score))
 
-            #print((R, S, score, R_id, S_id))
         ## Ending Candidate Refinement ##
         
         
@@ -506,59 +415,61 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         
     return output
 
+class EditTokenJoin():
+    
+    #def tokenjoin(left_df, right_df, left_id, right_id, left_join, right_join, left_attr, right_attr, left_prefix='l_', right_prefix='r_'):
+    def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
+        collection = transform_collection(df[join].values)
+        idx, lengths_list = build_index(collection)
+        
+        output = simjoin(collection, collection, delta, 
+                         idx, lengths_list, jointFilter, posFilter)
+    
+        output_df = pd.DataFrame(output, columns=[left_prefix+id, right_prefix+id, 'score'])
+        for col in attr+[join, id]:
+            output_df[left_prefix+col] = df.iloc[output_df[left_prefix+id]][col].values
+        for col in attr+[join, id]:
+            output_df[right_prefix+col] = df.iloc[output_df[right_prefix+id]][col].values    
+        
+        return output_df
+    
+    def tokenjoin_foreign(self, left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
+        right_collection = transform_collection(right_df[right_join].values)
+        idx, lengths_list = build_index(right_collection)
+        
+        left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
+        
+        output = simjoin(left_collection, right_collection,
+                         delta, idx, lengths_list, jointFilter, posFilter)
+        
+        output_df = pd.DataFrame(output, columns=[left_prefix+left_id, right_prefix+right_id, 'score'])
+        for col in left_attr+[left_join, left_id]:
+            output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
+        for col in right_attr+[right_join, right_id]:
+            output_df[right_prefix+col] = right_df.iloc[output_df[right_prefix+right_id]][col].values    
+        
+        return output_df
 
-#def tokenjoin(left_df, right_df, left_id, right_id, left_join, right_join, left_attr, right_attr, left_prefix='l_', right_prefix='r_'):
-def tokenjoin_self(df, id, join, attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
-    collection = transform_collection(df[join].values)
-    idx, lengths_list = build_index(collection)
-    
-    output = simjoin(collection, collection, delta, 
-                     idx, lengths_list, jointFilter, posFilter)
+    def tokenjoin_prepare(self, right_df, right_id, right_join, right_attr=[], right_prefix='r_'):
+        self.right_collection = transform_collection(right_df[right_join].values)
+        self.idx, self.lengths_list = build_index(self.right_collection)
+        self.right_df = right_df
+        self.right_id = right_id
+        self.right_join = right_join
+        self.right_attr = right_attr
+        self.right_prefix = right_prefix
+        
+    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', delta=0.7, jointFilter=False, posFilter=False):
+        left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
+        
+        output = simjoin(left_collection, self.right_collection,
+                         delta, self.idx, self.lengths_list, jointFilter, posFilter)
+        
+        output_df = pd.DataFrame(output, columns=[left_prefix+left_id, self.right_prefix+self.right_id, 'score'])
+        for col in left_attr+[left_join, left_id]:
+            output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
+        for col in self.right_attr+[self.right_join, self.right_id]:
+            output_df[self.right_prefix+col] = self.right_df.iloc[output_df[self.right_prefix+self.right_id]][col].values    
+        
+        return output_df    
 
-    output_df = pd.DataFrame(output, columns=[left_prefix+id, right_prefix+id, 'score'])
-
-    for col in attr+[join]:
-        output_df[left_prefix+col] = df.iloc[output_df[left_prefix+id]][col].values
-    for col in attr+[join]:
-        output_df[right_prefix+col] = df.iloc[output_df[right_prefix+id]][col].values    
-    
-    return output_df
-
-def tokenjoin_foreign(left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
-    right_collection = transform_collection(right_df[right_join].values)
-    idx, lengths_list = build_index(right_collection)
-    
-    left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
-    
-    output = simjoin(left_collection, right_collection,
-                     delta, idx, lengths_list, jointFilter, posFilter)
-    
-    output_df = pd.DataFrame(output, columns=[left_prefix+left_id, right_prefix+right_id, 'score'])
-
-    for col in left_attr+[left_join]:
-        output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
-    for col in right_attr+[right_join]:
-        output_df[right_prefix+col] = right_df.iloc[output_df[right_prefix+right_id]][col].values    
-    
-    return output_df
-
-
-def tokenjoin_foreign(left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
-    right_collection = transform_collection(right_df[right_join].values)
-    idx, lengths_list = build_index(right_collection)
-    
-    left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
-    
-    output = simjoin(left_collection, right_collection,
-                     delta, idx, lengths_list, jointFilter, posFilter)
-    
-    output_df = pd.DataFrame(output, columns=[left_prefix+left_id, right_prefix+right_id, 'score'])
-
-    for col in left_attr+[left_join]:
-        #output_df[left_prefix+col] = left_df.set_index(left_id).loc[output_df[left_prefix+left_id], col].values
-        output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
-    for col in right_attr+[right_join]:
-        #output_df[right_prefix+col] = right_df.set_index(right_id).loc[output_df[right_prefix+right_id], col].values    
-        output_df[right_prefix+col] = right_df.iloc[output_df[right_prefix+right_id]][col].values    
-    
-    return output_df

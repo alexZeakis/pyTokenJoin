@@ -1,9 +1,8 @@
 from collections import Counter
-import networkx as nx
 from math import floor, ceil
 import pandas as pd
-import progressbar
 from time import time
+from verification import verification, jaccard
 
 ### original_collection = df.text.values
 def transform_collection(original_collection, tok_to_int=None):
@@ -201,55 +200,6 @@ def post_joint(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_to
         
     return total    
 
-'''
-def jaccard(r, s):
-    rr = set(r)
-    ss = set(s)
-    return len(rr & ss) / len(rr | ss)
-'''
-
-def jaccard(r, s):
-    olap = pr = ps = 0
-    maxr = len(r) - pr + olap;
-    maxs = len(s) - ps + olap;
-
-    while maxr > olap and maxs > olap :
-        if r[pr] == s[ps] :
-            pr += 1
-            ps += 1
-            olap += 1
-        elif r[pr] < s[ps]: 
-            pr += 1
-            maxr -= 1
-        else:
-            ps += 1
-            maxs -= 1
-
-    return olap / (len(r) + len(s) - olap)
-
-def verification(R_record, S_record):
-    edges = []
-    for nor, r in enumerate(R_record):
-        for nos, s in enumerate(S_record):
-            edges.append((f'r_{nor}', f's_{nos}', jaccard(r, s)))
-    #print(edges)
-
-    G = nx.Graph()
-    G.add_weighted_edges_from(edges)
-
-    #print(G)
-    #print(nx.max_weight_matching(G))
-
-    matching = 0
-    for e in nx.max_weight_matching(G):
-        matching += G.edges[e]['weight']
-    #print(matching)
-
-    score = matching / (len(R_record) + len(S_record) - matching)
-    return score
-
-
-
 def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, posFilter):
 
     selfjoin = collection1 == collection2
@@ -396,9 +346,9 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
             t1 = time()
             #score = verification(R_rec, S_rec)
             if RLen < SLen:
-                score = verification(R_rec, S_rec)
+                score = verification(R_rec, S_rec, jaccard, pers_delta)
             else:
-                score = verification(S_rec, R_rec)
+                score = verification(S_rec, R_rec, jaccard, pers_delta)
             t2 = time()
             candver_time += t2-t1
 
@@ -417,43 +367,66 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         
     return output
 
-
-#def tokenjoin(left_df, right_df, left_id, right_id, left_join, right_join, left_attr, right_attr, left_prefix='l_', right_prefix='r_'):
-def tokenjoin_self(df, id, join, attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
-    collection = transform_collection(df[join].values)
-    idx, lengths_list = build_index(collection)
+class JaccardTokenJoin():
     
-    output = simjoin(collection['collection'], collection['collection'], delta, idx,
-                     lengths_list, jointFilter, posFilter)
+    #def tokenjoin(left_df, right_df, left_id, right_id, left_join, right_join, left_attr, right_attr, left_prefix='l_', right_prefix='r_'):
+    def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
+        collection = transform_collection(df[join].values)
+        idx, lengths_list = build_index(collection)
+        
+        output = simjoin(collection['collection'], collection['collection'], delta, idx,
+                         lengths_list, jointFilter, posFilter)
+        
+        output_df = pd.DataFrame(output, columns=[left_prefix+id, right_prefix+id, 'score'])
+        for col in attr+[join, id]:
+            #output_df[left_prefix+col] = df.set_index(id).loc[output_df[left_prefix+id], col].values
+            output_df[left_prefix+col] = df.iloc[output_df[left_prefix+id]][col].values
+        for col in attr+[join, id]:
+            #output_df[right_prefix+col] = df.set_index(id).loc[output_df[right_prefix+id], col].values    
+            output_df[right_prefix+col] = df.iloc[output_df[right_prefix+id]][col].values    
+        
+        return output_df
     
-    output_df = pd.DataFrame(output, columns=[left_prefix+id, right_prefix+id, 'score'])
-
-    for col in attr+[join]:
-        #output_df[left_prefix+col] = df.set_index(id).loc[output_df[left_prefix+id], col].values
-        output_df[left_prefix+col] = df.iloc[output_df[left_prefix+id]][col].values
-    for col in attr+[join]:
-        #output_df[right_prefix+col] = df.set_index(id).loc[output_df[right_prefix+id], col].values    
-        output_df[right_prefix+col] = df.iloc[output_df[right_prefix+id]][col].values    
     
-    return output_df
-
-
-def tokenjoin_foreign(left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
-    right_collection = transform_collection(right_df[right_join].values)
-    idx, lengths_list = build_index(right_collection)
+    def tokenjoin_foreign(self, left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
+        right_collection = transform_collection(right_df[right_join].values)
+        idx, lengths_list = build_index(right_collection)
+        
+        left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
+        
+        output = simjoin(left_collection['collection'], right_collection['collection'],
+                         delta, idx, lengths_list, jointFilter, posFilter)
+        
+        output_df = pd.DataFrame(output, columns=[left_prefix+left_id, right_prefix+right_id, 'score'])
+        for col in left_attr+[left_join, left_id]:
+            #output_df[left_prefix+col] = left_df.set_index(left_id).loc[output_df[left_prefix+left_id], col].values
+            output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
+        for col in right_attr+[right_join, right_id]:
+            #output_df[right_prefix+col] = right_df.set_index(right_id).loc[output_df[right_prefix+right_id], col].values    
+            output_df[right_prefix+col] = right_df.iloc[output_df[right_prefix+right_id]][col].values    
+        
+        return output_df
     
-    left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
+    def tokenjoin_prepare(self, right_df, right_id, right_join, right_attr=[], right_prefix='r_'):
+        self.right_collection = transform_collection(right_df[right_join].values)
+        self.idx, self.lengths_list = build_index(self.right_collection)
+        self.right_df = right_df
+        self.right_id = right_id
+        self.right_join = right_join
+        self.right_attr = right_attr
+        self.right_prefix = right_prefix
+        
     
-    output = simjoin(left_collection['collection'], right_collection['collection'],
-                     delta, idx, lengths_list, jointFilter, posFilter)
-    
-    output_df = pd.DataFrame(output, columns=[left_prefix+left_id, right_prefix+right_id, 'score'])
-
-    for col in left_attr+[left_join]:
-        #output_df[left_prefix+col] = left_df.set_index(left_id).loc[output_df[left_prefix+left_id], col].values
-        output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
-    for col in right_attr+[right_join]:
-        #output_df[right_prefix+col] = right_df.set_index(right_id).loc[output_df[right_prefix+right_id], col].values    
-        output_df[right_prefix+col] = right_df.iloc[output_df[right_prefix+right_id]][col].values    
-    
-    return output_df
+    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', delta=0.7, jointFilter=False, posFilter=False):
+        left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
+        
+        output = simjoin(left_collection, self.right_collection,
+                         delta, self.idx, self.lengths_list, jointFilter, posFilter)
+        
+        output_df = pd.DataFrame(output, columns=[left_prefix+left_id, self.right_prefix+self.right_id, 'score'])
+        for col in left_attr+[left_join, left_id]:
+            output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
+        for col in self.right_attr+[self.right_join, self.right_id]:
+            output_df[self.right_prefix+col] = self.right_df.iloc[output_df[self.right_prefix+self.right_id]][col].values    
+        
+        return output_df        
