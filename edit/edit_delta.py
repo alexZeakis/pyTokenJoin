@@ -1,224 +1,9 @@
-from collections import Counter
 from math import floor, ceil
 import pandas as pd
 from time import time
-from numpy import argsort
-from verification import verification, neds
-
-def find_record(no, final_collection):
-    return [ind for ind, r in enumerate(final_collection) if r[0] == no][0]
-
-### original_collection = df.text.values
-def transform_collection(original_collection, tok_to_int=None):
-    q = 3
-    tok_freq = Counter()
-    temp_collection = []
-    temp_collection_2 = []
-    words_collection = []
-
-    tokens_per_element = 0
-    element_per_record = 0
-
-    for nor, record in enumerate(original_collection):
-        temp_record = []
-        temp_record_2 = []
-        word_record = []
-        for word in record:
-            word2 = word + (q - 1)*"$"
-            word2 = word2[:(len(word2) - len(word2) % q)]
-            tokens = [word2[i:i+q] for i in range(len(word2) - q +1)]
-            
-            tc = Counter(tokens)
-            tokens = [f'{tok}@{v}' for tok, val in tc.items() for v in range(val)]
-            
-            tokens_2 = [word2[i:i+q] for i in range(0, len(word2) - q +1, q)]
-            tc = Counter(tokens_2)
-            tokens_2 = [f'{tok}@{v}' for tok, val in tc.items() for v in range(val)]
-            
-            tok_freq.update(tokens)
-            temp_record.append(tokens)
-            temp_record_2.append(tokens_2)
-            word_record.append(word2)
-            tokens_per_element += len(tokens)
-            
-            
-        inds = argsort([len(e) for e in temp_record])
-        temp_record = [temp_record[i] for i in inds]
-        temp_record_2 = [temp_record_2[i] for i in inds]
-        word_record = [word_record[i] for i in inds]
-            
-        # if nor == 27:
-        #     print(temp_record)
-        #     print(temp_record_2)
-        #     print(word_record)
-            
-        element_per_record += len(record)
-        temp_collection.append(temp_record)
-        temp_collection_2.append(temp_record_2)
-        words_collection.append(word_record)
-        
-    if tok_to_int is None:
-        sorted_toks = sorted(tok_freq.items(), key=lambda x: x[1])
-        tok_to_int = {tok[0]: no for no, tok in enumerate(sorted_toks)}
-    #else:
-    #    pass
-    #    #for tok 
-    #    #tok_to_int = {tok[0]: no for no, tok in enumerate(sorted_toks)}
-    
-    # final_collection = [(rid, sorted([sorted([tok_to_int[tok] for tok in word]) for word in record], key=lambda x: len(x)))
-    #                     for rid, record in enumerate(temp_collection)]
-    # final_collection_2 = [(rid, sorted([sorted([tok_to_int[tok] for tok in word]) for word in record], key=lambda x: len(x)))
-    #                     for rid, record in enumerate(temp_collection_2)]
-    
-    final_collection = [(rid, [sorted([tok_to_int[tok] for tok in word]) for word in record])
-                        for rid, record in enumerate(temp_collection)]
-    final_collection_2 = [(rid, [sorted([tok_to_int[tok] for tok in word]) for word in record])
-                        for rid, record in enumerate(temp_collection_2)]    
-    
-
-    tokens_per_element /= element_per_record;
-    element_per_record /= len(final_collection)
-
-    print("Finished reading file. Lines read: {}. Lines skipped due to errors: {}. Num of sets: {}. Elements per set: {}. Tokens per Element: {}".format(0, 0, len(final_collection), element_per_record, tokens_per_element))
-    
-    #Could possibly sort one for indexes and then all, to be sure sorting is the same
-    final_collection = sorted(final_collection, key=lambda x: len(x[1]))
-    final_collection_2 = sorted(final_collection_2, key=lambda x: len(x[1]))
-    final_word_collection = sorted(words_collection, key=lambda x: len(x))
-    
-    collection = {'collection': final_collection, 'dictionary': tok_to_int,
-                  'qcollection': final_collection_2, 'words': final_word_collection}
-    return collection
-
-
-def build_stats_for_record(R, QR, WR, q=3):
-    tokenIDs = {}
-    for nor, r in enumerate(R):
-        for tok in r:
-            util =  1 / len(WR[nor])
-            if tok not in tokenIDs:
-                tokenIDs[tok] = {}
-                tokenIDs[tok]['elements_2'] = []
-                tokenIDs[tok]['utility_2'] = 0
-                tokenIDs[tok]['utilities_2'] = []
-                tokenIDs[tok]['utility'] = 0
-                tokenIDs[tok]['utilities'] = []
-                tokenIDs[tok]['elements'] = []
-            tokenIDs[tok]['elements_2'].append(nor)
-            tokenIDs[tok]['utility_2'] += util
-            tokenIDs[tok]['utilities_2'].append(tokenIDs[tok]['utility_2'])
-            
-    for nor, r in enumerate(QR):
-        for tok in r:
-            util =  1 / len(WR[nor])
-            if tok not in tokenIDs:
-                tokenIDs[tok] = {}
-                tokenIDs[tok]['elements'] = []
-                tokenIDs[tok]['utility'] = 0
-                tokenIDs[tok]['utilities'] = []
-            tokenIDs[tok]['elements'].append(nor)
-            tokenIDs[tok]['utility'] += util
-            tokenIDs[tok]['utilities'].append(tokenIDs[tok]['utility'])
-
-    UB = len(R)
-    UB2 = len(R) * (q - 1) / q
-    for r in WR:
-        UB2 += (len(r)-q+1) / len(r) # (|r| - q) qgrams that all have
-
-    for tok, tok_info in sorted(tokenIDs.items(), key=lambda x: x[0]):
-        UB -= tok_info['utility']
-        tok_info['rest'] = UB
-        UB2 -= tok_info['utility_2']
-        tok_info['rest_2'] = UB2
-    
-    return tokenIDs
-    
-def build_index(collection):
-    lengths_list = [[] for _ in range(len(collection['dictionary']))]
-    idx = []
-    for noR, (idR, R) in enumerate(collection['collection']):
-        tokenIDs = build_stats_for_record(collection['collection'][noR][1],
-                                          collection['qcollection'][noR][1],
-                                          collection['words'][noR])
-        
-        #if noR == 0:
-        #    #print(tokenIDs)
-        #    for tok, tok_info in tokenIDs.items():
-        #        print(tok, tok_info['rest'], tok_info['rest_2'])
-        for tok in tokenIDs.keys():
-            lengths_list[tok].append(noR)
-
-        idx.append(tokenIDs) 
-    return idx, lengths_list
-
-def binary_search(arr, x):
-    low = 0
-    high = len(arr) - 1
-    mid = 0
-
-    while low <= high:
-        mid = (high + low) // 2
-
-        # If x is greater, ignore left half
-        if arr[mid] < x:
-            low = mid + 1
-        # If x is smaller, ignore right half
-        elif arr[mid] > x:
-            high = mid - 1
-        # means x is present at mid
-        else:
-            return mid
-    # If we reach here, then the element was not present
-    #return -1
-    return mid  
-
-def binary_search_dupl(arr, x, collection):
-    low = 0
-    high = len(arr) - 1
-    mid = 0
-
-    while low <= high:
-        mid = (high + low) // 2
-
-        # If x is greater, ignore left half
-        if len(collection[arr[mid]]) < x:
-            low = mid + 1
-        # If x is smaller, ignore right half
-        elif len(collection[arr[mid]]) > x:
-            high = mid - 1
-        # means x is present at mid
-        else:
-            return mid
-    # If we reach here, then the element was not present
-    #return -1
-    return mid       
-    
-def post_basic(R, S, tokens, idx, pers_delta, total, pos_tok):
-    for (tok, tok_info) in tokens[pos_tok:]:
-        if tok not in idx[S]:
-            total -= tok_info['utility']
-            
-        if pers_delta - total > .0000001:
-            return total
-    return total
-
-def post_positional(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_tok):
-    for (tok, tok_info) in tokens[pos_tok:]:
-        sum_stopped -= tok_info['utility']
-        if tok in idx[S]:
-            tok_info_S = idx[S][tok]
-            util_gathered += tok_info['utility']
-
-            if pers_delta - (util_gathered + sum_stopped) > .0000001:
-                return (util_gathered + sum_stopped)
-            
-            if pers_delta - (util_gathered + tok_info_S['rest']) > .0000001:
-                return (util_gathered + tok_info_S['rest'])
-        else:
-            if pers_delta - (util_gathered + sum_stopped) > .0000001:
-                return (util_gathered + sum_stopped)
-    return (util_gathered + sum_stopped)
-
+from utils.verification import verification, neds
+from utils.utils import binary_search, binary_search_dupl, post_basic, post_positional
+from edit.edit_utils import transform_collection, build_stats_for_record, build_index
 
 def post_joint(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_tok):
     for (tok, tok_info) in tokens[pos_tok:]:
@@ -252,10 +37,6 @@ def post_joint(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_to
         
     return total    
 
-
-
-
-
 def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, posFilter):
 
     selfjoin = collection1 == collection2
@@ -268,9 +49,6 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         if R % 100 == 0:
             print("Progress {:,}/{:,} \r".format(R, len(collection1['collection'])), end='')
         
-        # if R != 348:
-        #     continue
-
         t1 = time()
         ## Starting Initialization ##
         (R_id, _) = collection1['collection'][R]
@@ -302,7 +80,6 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         t1 = time()
         cands_scores = {}
         ## Starting Candidate Generation ##
-        
         for pos_tok, (tok, tok_info) in enumerate(tokens):
             if theta - sum_stopped > 0.0000001:
                 break
@@ -314,19 +91,17 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
 
             if selfjoin:
                 true_min = binary_search(lengths_list[tok], R)
-                
+
                 for S in lengths_list[tok][true_min:]:
-                    
                     if R == S:
                         continue
-                    
+
                     if len(collection2['words'][S]) > RLen_max:
                         break
 
                     if S not in cands_scores:
                         cands_scores[S] = 0
                     cands_scores[S] += tok_info['utility']
-                # print("\t", pos_tok, tok, cands_scores)
 
             else:
                 
@@ -391,7 +166,7 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
                 continue
 
             no_candver += 1
-            
+
             t1 = time()
             #score = verification(R_rec, S_rec)
             if RLen < SLen:
