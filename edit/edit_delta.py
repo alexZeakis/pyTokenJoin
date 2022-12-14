@@ -1,9 +1,9 @@
 from math import floor, ceil
 import pandas as pd
 from time import time
-from utils.verification import verification, neds
-from utils.utils import binary_search, binary_search_dupl, post_basic, post_positional
-from edit.edit_utils import transform_collection, build_stats_for_record, build_index
+from pyTokenJoin.utils.verification import verification, neds
+from pyTokenJoin.utils.utils import binary_search, binary_search_dupl, post_basic, post_positional
+from pyTokenJoin.edit.edit_utils import transform_collection, build_stats_for_record, build_index
 
 def post_joint(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_tok):
     for (tok, tok_info) in tokens[pos_tok:]:
@@ -47,7 +47,7 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
     for R in range(len(collection1['words'])):
         
         if R % 100 == 0:
-            print("Progress {:,}/{:,} \r".format(R, len(collection1['collection'])), end='')
+            print("\rProgress {:,}/{:,}".format(R, len(collection1['collection'])), end='')
         
         t1 = time()
         ## Starting Initialization ##
