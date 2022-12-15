@@ -1,7 +1,7 @@
 from math import floor, ceil
 import pandas as pd
 from time import time
-from pyTokenJoin.utils.verification import verification, jaccard
+from pyTokenJoin.utils.verification import verification, verification_opt, jaccard
 from pyTokenJoin.utils.utils import binary_search, binary_search_dupl
 from pyTokenJoin.jaccard.jaccard_utils import transform_collection, build_stats_for_record, build_index
 import heapq
@@ -196,9 +196,9 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                 
                 #score = verification(R_rec, S_rec)
                 if RLen < SLen:
-                    score = verification(R_rec, S_rec, jaccard, pers_delta)
+                    score = verification_opt(R_rec, S_rec, jaccard, pers_delta, 1)
                 else:
-                    score = verification(S_rec, R_rec, jaccard, pers_delta)
+                    score = verification_opt(S_rec, R_rec, jaccard, pers_delta, 1)
 
                 if delta - score > 0.000000001:
                     continue

@@ -1,7 +1,7 @@
 from math import floor, ceil
 import pandas as pd
 from time import time
-from pyTokenJoin.utils.verification import verification, neds
+from pyTokenJoin.utils.verification import verification, verification_opt, neds
 from pyTokenJoin.utils.utils import binary_search, binary_search_dupl, post_basic, post_positional
 from pyTokenJoin.edit.edit_utils import transform_collection, build_stats_for_record, build_index
 
@@ -37,7 +37,7 @@ def post_joint(R, S, tokens, idx, pers_delta, util_gathered, sum_stopped, pos_to
         
     return total    
 
-def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, posFilter):
+def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, posFilter, verification_alg):
 
     selfjoin = collection1 == collection2
     
@@ -169,10 +169,16 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
 
             t1 = time()
             #score = verification(R_rec, S_rec)
-            if RLen < SLen:
-                score = verification(R_rec, S_rec, neds, pers_delta)
+            if verification_alg >= 0:
+                if RLen < SLen:
+                    score = verification_opt(R_rec, S_rec, neds, pers_delta, verification_alg)
+                else:
+                    score = verification_opt(S_rec, R_rec, neds, pers_delta, verification_alg)            
             else:
-                score = verification(S_rec, R_rec, neds, pers_delta)
+                if RLen < SLen:
+                    score = verification(R_rec, S_rec, neds, pers_delta)
+                else:
+                    score = verification(S_rec, R_rec, neds, pers_delta)
             t2 = time()
             candver_time += t2-t1
 
@@ -193,12 +199,12 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
 class EditTokenJoin():
     
     #def tokenjoin(left_df, right_df, left_id, right_id, left_join, right_join, left_attr, right_attr, left_prefix='l_', right_prefix='r_'):
-    def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
+    def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False, verification_alg=0):
         collection = transform_collection(df[join].values)
         idx, lengths_list = build_index(collection)
         
         output = simjoin(collection, collection, delta, 
-                         idx, lengths_list, jointFilter, posFilter)
+                         idx, lengths_list, jointFilter, posFilter, verification_alg)
     
         output_df = pd.DataFrame(output, columns=[left_prefix+id, right_prefix+id, 'score'])
         for col in attr+[join, id]:
@@ -208,14 +214,14 @@ class EditTokenJoin():
         
         return output_df
     
-    def tokenjoin_foreign(self, left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False):
+    def tokenjoin_foreign(self, left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False, verification_alg=0):
         right_collection = transform_collection(right_df[right_join].values)
         idx, lengths_list = build_index(right_collection)
         
         left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
         
         output = simjoin(left_collection, right_collection,
-                         delta, idx, lengths_list, jointFilter, posFilter)
+                         delta, idx, lengths_list, jointFilter, posFilter, verification_alg)
         
         output_df = pd.DataFrame(output, columns=[left_prefix+left_id, right_prefix+right_id, 'score'])
         for col in left_attr+[left_join, left_id]:
@@ -234,11 +240,11 @@ class EditTokenJoin():
         self.right_attr = right_attr
         self.right_prefix = right_prefix
         
-    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', delta=0.7, jointFilter=False, posFilter=False):
+    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', delta=0.7, jointFilter=False, posFilter=False, verification_alg=0):
         left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
         
         output = simjoin(left_collection, self.right_collection,
-                         delta, self.idx, self.lengths_list, jointFilter, posFilter)
+                         delta, self.idx, self.lengths_list, jointFilter, posFilter, verification_alg)
         
         output_df = pd.DataFrame(output, columns=[left_prefix+left_id, self.right_prefix+self.right_id, 'score'])
         for col in left_attr+[left_join, left_id]:
