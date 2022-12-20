@@ -12,4 +12,4 @@ There are two ways to use TokenJoin:
 
 There are also two similarity functions supported: Jaccard and Edit Similarity.
 
-More information on how to use the functions can be found on [this jupyter notebook](https://github.com/alexZeakis/TokenJoin/tree/main/demos/Demo.ipynb). 
+More information on how to use the functions can be found on [this jupyter notebook](https://github.com/alexZeakis/pyTokenJoin/blob/main/demos/Demo.ipynb). 
