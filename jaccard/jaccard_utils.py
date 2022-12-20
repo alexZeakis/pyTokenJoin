@@ -31,10 +31,12 @@ def transform_collection(original_collection, tok_to_int=None):
     if tok_to_int is None:
         sorted_toks = sorted(tok_freq.items(), key=lambda x: x[1])
         tok_to_int = {tok[0]: no for no, tok in enumerate(sorted_toks)}
-    #else:
-    #    pass
-    #    #for tok 
-    #    #tok_to_int = {tok[0]: no for no, tok in enumerate(sorted_toks)}
+    else:
+        neg = 0
+        for tok in tok_freq:
+            if tok not in tok_to_int:
+                neg += 1
+                tok_to_int[tok] = -neg        
     
     final_collection = [(rid, sorted([sorted([tok_to_int[tok] for tok in word]) for word in record], key=lambda x: len(x)))
                         for rid, record in enumerate(temp_collection)]

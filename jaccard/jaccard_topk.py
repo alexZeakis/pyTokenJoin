@@ -51,6 +51,9 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                 break
                 
             sum_stopped -= tok_info['utility']
+            
+            if tok < 0:
+                continue
 
             if selfjoin:
                 true_min = binary_search(lengths_list[tok], R)

@@ -73,6 +73,7 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         t2 = time()
         init_time += t2-t1
         
+        
         t1 = time()
         cands_scores = {}
         ## Starting Candidate Generation ##
@@ -81,6 +82,9 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
                 break
                 
             sum_stopped -= tok_info['utility']
+            
+            if tok < 0:
+                continue
 
             if selfjoin:
                 true_min = binary_search(lengths_list[tok], R)
