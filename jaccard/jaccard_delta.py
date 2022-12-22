@@ -245,7 +245,7 @@ class JaccardTokenJoin():
     def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', delta=0.7, jointFilter=False, posFilter=False, verification_alg=0):
         left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
         
-        output = simjoin(left_collection, self.right_collection,
+        output = simjoin(left_collection['collection'], self.right_collection['collection'],
                          delta, self.idx, self.lengths_list, jointFilter, posFilter, verification_alg)
         
         output_df = pd.DataFrame(output, columns=[left_prefix+left_id, self.right_prefix+self.right_id, 'score'])
