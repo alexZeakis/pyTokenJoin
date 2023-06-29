@@ -286,7 +286,7 @@ class JaccardTokenJoin():
         output = simjoin(left_collection['collection'], self.right_collection['collection'],
                          k, self.idx, self.lengths_list)
         
-        output_df = pd.DataFrame(output, columns=[left_prefix+left_id, self.right_prefix+self.right_id, 'score'])
+        output_df = pd.DataFrame(output, columns=['score', left_prefix+left_id, self.right_prefix+self.right_id])
         for col in left_attr+[left_join, left_id]:
             output_df[left_prefix+col] = left_df.iloc[output_df[left_prefix+left_id]][col].values
         for col in self.right_attr+[self.right_join, self.right_id]:
