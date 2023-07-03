@@ -73,8 +73,8 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                     cands_scores[S] += tok_info['utility']
 
             else:
-                
                 true_min = binary_search_dupl(lengths_list[tok], RLen, collection2)
+                
                 for S in lengths_list[tok][true_min:]:
                     if len(collection2[S][1]) > RLen_max:
                         break
@@ -83,13 +83,16 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                         cands_scores[S] = 0
                     cands_scores[S] += tok_info['utility']
                 
-                for S in lengths_list[tok][true_min::-1]:
-                    if len(collection2[S][1]) < RLen_min:
-                        break
-    
-                    if S not in cands_scores:
-                        cands_scores[S] = 0
-                    cands_scores[S] += tok_info['utility']        
+                
+                true_min -= 1   # true_min examined in previous increasing parsing
+                if true_min >= 0:    # reached start of inv list and -1 will go circular
+                    for S in lengths_list[tok][true_min::-1]:
+                        if len(collection2[S][1]) < RLen_min:
+                            break
+        
+                        if S not in cands_scores:
+                            cands_scores[S] = 0
+                        cands_scores[S] += tok_info['utility']        
                 '''
                 for S in lengths_list[tok]:
                     if RLen_min > len(collection2[S][1]) > RLen_max:
@@ -107,7 +110,6 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
 
         Q = []
         for S, util_gathered in cands_scores.items():
-
             total = sum_stopped + util_gathered
             (S_id, S_rec) = collection2[S]
             SLen = len(S_rec)

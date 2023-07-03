@@ -117,13 +117,15 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
                         cands_scores[S] = 0
                     cands_scores[S] += tok_info['utility']
                 
-                for S in lengths_list[tok][true_min::-1]:
-                    if len(collection2['words'][S]) < RLen_min:
-                        break
-    
-                    if S not in cands_scores:
-                        cands_scores[S] = 0
-                    cands_scores[S] += tok_info['utility']        
+                true_min -= 1   # true_min examined in previous increasing parsing
+                if true_min >= 0:    # reached start of inv list and -1 will go circular
+                    for S in lengths_list[tok][true_min::-1]:
+                        if len(collection2['words'][S]) < RLen_min:
+                            break
+        
+                        if S not in cands_scores:
+                            cands_scores[S] = 0
+                        cands_scores[S] += tok_info['utility']        
                 '''
                 for S in lengths_list[tok]:
                     if RLen_min > len(collection2['words'][S]) > RLen_max:
