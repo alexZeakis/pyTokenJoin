@@ -1,9 +1,9 @@
 from math import floor, ceil
 import pandas as pd
 from time import time
-from pyTokenJoin.utils.verification import verification, verification_opt, jaccard
-from pyTokenJoin.utils.utils import binary_search, binary_search_dupl
-from pyTokenJoin.jaccard.jaccard_utils import transform_collection, build_stats_for_record, build_index
+from pytokenjoin.utils.verification import verification, verification_opt, neds
+from pytokenjoin.utils.utils import binary_search, binary_search_dupl
+from pytokenjoin.edit.edit_utils import transform_collection, build_stats_for_record, build_index
 import heapq
 
 def simjoin(collection1, collection2, k, idx, lengths_list):
@@ -14,33 +14,35 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
     init_time = candgen_time = candref_time = candver_time = 0
     no_candgen = no_candref = no_candver = no_candres = 0
     output = []
-    for R, (R_id, R_rec) in enumerate(collection1):
-        
-        temp_delta = delta
-        temp_output = []
+    
+    for R in range(len(collection1['words'])):
         
         if R % 100 == 0:
-            print("\rProgress {:,}/{:,} \t: δ: {}".format(R, len(collection1), temp_delta), end='')
-
+            print("\rProgress {:,}/{:,} \t: δ: {}".format(R, len(collection1['words']), delta), end='')
+        
         t1 = time()
         ## Starting Initialization ##
+        (R_id, _) = collection1['collection'][R]
+        R_rec = collection1['words'][R]
         RLen = len(R_rec)
         
         if selfjoin:
             tokens = idx[R]
         else:
-            tokens = build_stats_for_record(R_rec)
+            tokens = build_stats_for_record(collection1['collection'][R][1],
+                                            collection1['qcollection'][R][1],
+                                            collection1['words'][R])
         
         tokens = sorted(tokens.items(), key=lambda x: x[0])
         sum_stopped = RLen
         
-        RLen_max = floor(RLen / temp_delta)
+        RLen_max = floor(RLen / delta)
         
         if selfjoin:
-            theta = 2 * temp_delta / (1 + temp_delta) * RLen
+            theta = 2 * delta / (1 + delta) * RLen
         else:
-            theta = temp_delta * RLen
-            RLen_min = ceil(RLen * temp_delta)
+            theta = delta * RLen
+            RLen_min = ceil(RLen * delta)
 
         ## Ending Initialization ##
         t2 = time()
@@ -52,6 +54,9 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
         for pos_tok, (tok, tok_info) in enumerate(tokens):
             if theta - sum_stopped > 0.0000001:
                 break
+            
+            if tok_info['utility'] == 0: #not qchunk
+                continue
                 
             sum_stopped -= tok_info['utility']
             
@@ -65,7 +70,7 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                     if R == S:
                         continue
 
-                    if len(collection2[S][1]) > RLen_max:
+                    if len(collection2['words'][S]) > RLen_max:
                         break
 
                     if S not in cands_scores:
@@ -73,21 +78,20 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                     cands_scores[S] += tok_info['utility']
 
             else:
-                true_min = binary_search_dupl(lengths_list[tok], RLen, collection2)
                 
+                true_min = binary_search_dupl(lengths_list[tok], RLen, collection2['words'])
                 for S in lengths_list[tok][true_min:]:
-                    if len(collection2[S][1]) > RLen_max:
+                    if len(collection2['words'][S]) > RLen_max:
                         break
 
                     if S not in cands_scores:
                         cands_scores[S] = 0
                     cands_scores[S] += tok_info['utility']
                 
-                
                 true_min -= 1   # true_min examined in previous increasing parsing
                 if true_min >= 0:    # reached start of inv list and -1 will go circular
                     for S in lengths_list[tok][true_min::-1]:
-                        if len(collection2[S][1]) < RLen_min:
+                        if len(collection2['words'][S]) < RLen_min:
                             break
         
                         if S not in cands_scores:
@@ -95,7 +99,7 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                         cands_scores[S] += tok_info['utility']        
                 '''
                 for S in lengths_list[tok]:
-                    if RLen_min > len(collection2[S][1]) > RLen_max:
+                    if RLen_min > len(collection2['words'][S]) > RLen_max:
                         continue
 
                     if S not in cands_scores:
@@ -110,26 +114,29 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
 
         Q = []
         for S, util_gathered in cands_scores.items():
+            
             total = sum_stopped + util_gathered
-            (S_id, S_rec) = collection2[S]
+            (S_id, _) = collection2['collection'][S]
+            S_rec = collection2['words'][S]
             SLen = len(S_rec)
             
             score = total / (RLen + SLen - total)
-            if temp_delta - score > .0000001:
+            
+            if delta - score > .0000001:
                 continue
             heapq.heappush(Q, (-score, S, util_gathered, 0))
             
-        
         ## Starting Candidate Refinement ##
-        while len(Q) > 0 and -heapq.nsmallest(1, Q)[0][0] > temp_delta:
+        #for S, util_gathered in cands_scores.items():
+        while len(Q) > 0 and -heapq.nsmallest(1, Q)[0][0] > delta:
             (score, S, util_gathered, stage) = heapq.heappop(Q)    #heappop pops smallest, thus largest
             t1 = time()
-            (S_id, S_rec) = collection2[S]
+            (S_id, _) = collection2['collection'][S]
+            S_rec = collection2['words'][S]
             SLen = len(S_rec)
             # print()
 
-            pers_delta = temp_delta / (1.0 + temp_delta) * (RLen + SLen)
-
+            pers_delta = delta / (1.0 + delta) * (RLen + SLen)
 
             if stage == 0:
             
@@ -163,8 +170,9 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                     UB = util_gathered + csum_stopped
                     
                 score = UB / (RLen + SLen - UB)
-                if temp_delta - score < .0000001:
-                    heapq.heappush(Q, (-score, S, util_gathered, 1))
+                
+                if delta - score < .0000001:
+                    heapq.heappush(Q, (-score, S, util_gathered + csum_stopped, 1))
                 t2 = time()
                 candref_time += t2-t1                    
                     
@@ -183,44 +191,40 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
                         UB -= tok_info['utility']
                         
                         tok_info_S = idx[S][tok]
-                        minLen = min(len(tok_info['utilities']), len(tok_info_S['utilities'])) - 1
-                        util_score = min(tok_info['utilities'][minLen], tok_info_S['utilities'][minLen])
+                        minLen = min(len(tok_info['utilities_2']), len(tok_info_S['utilities_2'])) - 1
+                        util_score = min(tok_info['utilities_2'][minLen], tok_info_S['utilities_2'][minLen])
                         UB += util_score
             
                     if pers_delta - total > .0000001:
                         break
 
                 score = UB / (RLen + SLen - UB)
-                if temp_delta - score < .0000001:
+                if delta - score < .0000001:
                     heapq.heappush(Q, (-score, S, UB, 2))
                 t2 = time()
                 candref_time += t2-t1  
 
-
-            
             elif stage == 2: 
                 
                 no_candres += 1
                 
                 #score = verification(R_rec, S_rec)
                 if RLen < SLen:
-                    score = verification_opt(R_rec, S_rec, jaccard, pers_delta, 1)
+                    score = verification_opt(R_rec, S_rec, neds, pers_delta, 1)
                 else:
-                    score = verification_opt(S_rec, R_rec, jaccard, pers_delta, 1)
+                    score = verification_opt(S_rec, R_rec, neds, pers_delta, 1)
 
-                if temp_delta - score > 0.000000001:
+                if delta - score > 0.000000001:
                     continue
 
-                
-                #TODO: Fix this
-                # if score == 1.0:
-                #     continue
+                if score == 1.0:
+                    continue
             
-                if len(temp_output) < k:
-                    heapq.heappush(temp_output, (score, R_id, S_id))
+                if len(output) < k:
+                    heapq.heappush(output, (score, R_id, S_id))
                 else:
-                    heapq.heappushpop(temp_output, (score, R_id, S_id))
-                    temp_delta = heapq.nsmallest(1, temp_output)[0][0]
+                    heapq.heappushpop(output, (score, R_id, S_id))
+                    delta = heapq.nsmallest(1, output)[0][0]
                     
                 t2 = time()
                 candver_time += t2-t1                    
@@ -228,20 +232,19 @@ def simjoin(collection1, collection2, k, idx, lengths_list):
 
             #print((R, S, score, R_id, S_id))
         ## Ending Candidate Refinement ##
-        output += temp_output
 
     print('\nTime elapsed: Init: {:.2f}, Cand Gen: {:.2f}, Cand Ref: {:.2f}, Cand Ver: {:.2f}'.format(init_time, candgen_time, candref_time, candver_time))
-    print('Candidates Generated: {:,}, Refined: {:,}, Verified: {:,}, Survived: {:,}, Final: {:,}'.format(no_candgen, no_candref, no_candver, no_candres, len(output)))
-    # print('Final δ is {:.3f}'.format(delta))
+    print('Candidates Generated: {:,}, Refined: {:,}, Verified: {:,}, Survived: {:,}'.format(no_candgen, no_candref, no_candver, no_candres))
+    print('Final δ is {:.3f}'.format(delta))
     return output
 
-class JaccardTokenJoin():
+class EditTokenJoin():
     
     def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', k=1000):
         collection = transform_collection(df[join].values)
         idx, lengths_list = build_index(collection)
         
-        output = simjoin(collection['collection'], collection['collection'], k, idx,
+        output = simjoin(collection, collection, k, idx,
                          lengths_list)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+id, right_prefix+id])
@@ -262,7 +265,7 @@ class JaccardTokenJoin():
         
         left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
         
-        output = simjoin(left_collection['collection'], right_collection['collection'],
+        output = simjoin(left_collection, right_collection,
                          k, idx, lengths_list)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+left_id, right_prefix+right_id])
@@ -289,7 +292,7 @@ class JaccardTokenJoin():
     def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', k=1000):
         left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
         
-        output = simjoin(left_collection['collection'], self.right_collection['collection'],
+        output = simjoin(left_collection, self.right_collection,
                          k, self.idx, self.lengths_list)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+left_id, self.right_prefix+self.right_id])
@@ -298,4 +301,4 @@ class JaccardTokenJoin():
         for col in self.right_attr+[self.right_join, self.right_id]:
             output_df[self.right_prefix+col] = self.right_df.iloc[output_df[self.right_prefix+self.right_id]][col].values    
         
-        return output_df        
+        return output_df   

@@ -1,9 +1,9 @@
 from math import floor, ceil
 import pandas as pd
 from time import time
-from pyTokenJoin.utils.verification import verification, verification_opt, jaccard
-from pyTokenJoin.utils.utils import binary_search, binary_search_dupl
-from pyTokenJoin.jaccard.jaccard_utils import transform_collection, build_stats_for_record, build_index
+from pytokenjoin.utils.verification import verification, verification_opt, jaccard
+from pytokenjoin.utils.utils import binary_search, binary_search_dupl
+from pytokenjoin.jaccard.jaccard_utils import transform_collection, build_stats_for_record, build_index
 import heapq
 
 def simjoin(collection1, collection2, k, idx, lengths_list):

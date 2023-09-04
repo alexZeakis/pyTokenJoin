@@ -1,8 +1,15 @@
+pytokenjoin/data/metadata.txt
+
+pytokenjoin.egg-info/
+build/
+dist/
+
 .ipynb_checkpoints/
 .spyproject/
-demos/.ipynb_checkpoints/
+pytokenjoin/demos/.ipynb_checkpoints/
 
-*/__pycache__/
 __pycache__/
+pytokenjoin/*/__pycache__/
+pytokenjoin/*/*/__pycache__/
 
-jupyter/
+pytokenjoin/jupyter/

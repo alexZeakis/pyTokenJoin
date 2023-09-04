@@ -1,5 +1,4 @@
 import networkx as nx
-import networkx as nx
 import editdistance
 import heapq
 
