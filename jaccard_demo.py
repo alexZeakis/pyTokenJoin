@@ -1,5 +1,6 @@
 import pandas as pd
-from jaccard.jaccard_delta import JaccardTokenJoin
+from pytokenjoin.jaccard.join_delta import JaccardTokenJoin
+from pytokenjoin.edit.join_delta import EditTokenJoin
 
 ## Load data
 file = '/home/alex/Desktop/datasets/yelp/yelp_clean.csv'
@@ -13,7 +14,7 @@ df.text = df.text.apply(lambda x: x.split(';'))
 df.text = df.text.apply(lambda x: list(set(x)))
 print(df.head(10))
 
-output_df = JaccardTokenJoin().tokenjoin_self(df, id='id', join='text', posFilter=True, jointFilter=True)
+output_df = EditTokenJoin().tokenjoin_self(df, id='id', join='text', posFilter=True, jointFilter=True)
 # print(output_df.shape)
 
 #pyTokenJoin
