@@ -1,21 +1,71 @@
 from math import floor, ceil
 import pandas as pd
 from time import time
-from pytokenjoin.utils.verification import verification, verification_opt, neds
+from pytokenjoin.utils.verification import verification_opt, neds
 from pytokenjoin.utils.utils import binary_search, binary_search_dupl
 from pytokenjoin.edit.join_utils import transform_collection, build_stats_for_record, build_index
 import heapq
 
-def simjoin(collection1, collection2, k, idx, lengths_list, log):
+def delta_init(collection1, collection2, k, delta_alg, element,
+               delta_generation=0.9, mu=0.01, lamda=2, sample_percentage=0.4):
+    cached = {}
+    output = []
+    if delta_alg == 0:
+        pass
+    elif delta_alg == 1:
+        i = 0
+        while len(output) != k :
+            limit = min(i + k, len(collection2['words']))
+            (R_id, _) = collection1['collection'][i]
+            R_rec = collection1['words'][i]
+            
+            for j in range(i+1, limit):
+                (S_id, _) = collection2['collection'][j]
+                S_rec = collection2['words'][j]
+                score = verification_opt(R_rec, S_rec, neds, 0, 1)
+                if i not in cached:
+                    cached[i] = set()
+                cached[i].add(j)
+
+                if score == 1.0 or score == 0.0:
+                    continue
+                
+                heapq.heappush(output, (score, R_id, S_id))
+                if len(output) > k:
+                    heapq.heappop()
+                    
+                if len(output) == k and heapq.nsmallest(1, output)[0][0] > 0:
+                    return output, cached
+
+                i += 1
+                if i > len(collection1):
+                    break
+    elif delta_alg == 2:
+        #TODO:
+        pass
+
+    return output, cached
+
+def simjoin(collection1, collection2, k, idx, lengths_list, delta_alg, log):
 
     selfjoin = collection1 == collection2
-    delta = 0.000000001
+    init_delta = time()
+    output, cached = delta_init(collection1, collection2, k, delta_alg, neds)
+    if len(output) == 0:
+        delta = 0.000000001
+    else:
+        delta = heapq.nsmallest(1, output)[0][0]
+    original_delta = delta
+    print('Original δ {:.3f}'.format(original_delta))
+    init_delta = time() - init_delta
 
     init_time = candgen_time = candref_time = candver_time = 0
     no_candgen = no_candref = no_candver = no_candres = 0
-    output = []
     
     for R in range(len(collection1['words'])):
+        
+        R_cached = cached.get(R)
+        R_cached = R_cached if R_cached is not None else set()
         
         if R % 100 == 0:
             print("\rProgress {:,}/{:,} \t: δ: {}".format(R, len(collection1['words']), delta), end='')
@@ -70,6 +120,8 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
                 for S in lengths_list[tok][true_min:]:
                     if R == S:
                         continue
+                    if collection2['collection'][S][0] in R_cached:
+                        continue
 
                     if len(collection2['words'][S]) > RLen_max:
                         break
@@ -82,6 +134,8 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
                 
                 true_min = binary_search_dupl(lengths_list[tok], RLen, collection2['words'])
                 for S in lengths_list[tok][true_min:]:
+                    if collection2['collection'][S][0] in R_cached:
+                        continue
                     if len(collection2['words'][S]) > RLen_max:
                         break
 
@@ -92,6 +146,8 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
                 true_min -= 1   # true_min examined in previous increasing parsing
                 if true_min >= 0:    # reached start of inv list and -1 will go circular
                     for S in lengths_list[tok][true_min::-1]:
+                        if collection2['collection'][S][0] in R_cached:
+                            continue
                         if len(collection2['words'][S]) < RLen_min:
                             break
         
@@ -234,6 +290,7 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
             #print((R, S, score, R_id, S_id))
         ## Ending Candidate Refinement ##
 
+    log['init_delta_time'] = init_delta
     log['init_time'] = init_time
     log['candgen_time'] = candgen_time
     log['candref_time'] = candref_time
@@ -242,7 +299,9 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
     log['no_candref'] = no_candref
     log['no_candver'] = no_candver
     log['no_candres'] = no_candres
-    log['delta'] = delta
+    log['original_delta'] = original_delta
+    log['final_delta'] = delta
+    
 
     print('\nTime elapsed: Init: {:.2f}, Cand Gen: {:.2f}, Cand Ref: {:.2f}, Cand Ver: {:.2f}'.format(init_time, candgen_time, candref_time, candver_time))
     print('Candidates Generated: {:,}, Refined: {:,}, Verified: {:,}, Survived: {:,}'.format(no_candgen, no_candref, no_candver, no_candres))
@@ -251,14 +310,14 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
 
 class EditTokenJoin():
     
-    def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', k=1000, keepLog=False):
+    def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', k=1000, delta_alg=0, keepLog=False):
         total_time = time()
         log = {}
         collection = transform_collection(df[join].values)
         idx, lengths_list = build_index(collection)
         
         output = simjoin(collection, collection, k, idx,
-                         lengths_list, log)
+                         lengths_list, delta_alg, log)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+id, right_prefix+id])
         for col in attr+[join, id]:
@@ -276,7 +335,7 @@ class EditTokenJoin():
         return output_df
     
     
-    def tokenjoin_foreign(self, left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', k=1000, keepLog=False):
+    def tokenjoin_foreign(self, left_df, right_df, left_id, right_id, left_join, right_join, left_attr=[], right_attr=[], left_prefix='l_', right_prefix='r_', k=1000, delta_alg=0, keepLog=False):
         total_time = time()
         log = {}
         right_collection = transform_collection(right_df[right_join].values)
@@ -285,7 +344,7 @@ class EditTokenJoin():
         left_collection = transform_collection(left_df[left_join].values, right_collection['dictionary'])
         
         output = simjoin(left_collection, right_collection,
-                         k, idx, lengths_list, log)
+                         k, idx, lengths_list, delta_alg, log)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+left_id, right_prefix+right_id])
         for col in left_attr+[left_join, left_id]:
@@ -312,12 +371,12 @@ class EditTokenJoin():
         self.right_prefix = right_prefix
         
     
-    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', k=1000, keepLog=False):
+    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', k=1000, delta_alg=0, keepLog=False):
         log = {}
         left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
         
         output = simjoin(left_collection, self.right_collection,
-                         k, self.idx, self.lengths_list, log)
+                         k, self.idx, self.lengths_list, delta_alg, log)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+left_id, self.right_prefix+self.right_id])
         for col in left_attr+[left_join, left_id]:
