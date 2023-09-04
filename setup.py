@@ -9,8 +9,8 @@ setup(
     url="https://github.com/alexZeakis/pyTokenJoin",
     packages=["pytokenjoin"],
     install_requires=[
-        editdistance,
-        networkx
+        editdistance=0.6.2,
+        networkx=3.1
     ],
 )
 

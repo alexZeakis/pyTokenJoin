@@ -1,5 +1,7 @@
 # pyTokenJoin
 
+![alt text](img/logo.png)
+
 ## Overview
 
 TokenJoin is an efficient method for solving the Fuzzy Set Similarity Join problem. It relies only on tokens and their defined _utilities_, avoiding pairwise comparisons between elements. It is submitted to the International Conference on Very Large Databases (VLDB). This is the repository for the python source code. More information about the original method can be found [here](https://github.com/alexZeakis/TokenJoin).
