@@ -81,9 +81,15 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         t1 = time()
         cands_scores = {}
         ## Starting Candidate Generation ##
-        for pos_tok, (tok, tok_info) in enumerate(tokens):
-            if theta - sum_stopped > 0.0000001:
+#        for pos_tok, (tok, tok_info) in enumerate(tokens):
+#            if theta - sum_stopped > 0.0000001:
+#                break
+        pos_tok = 0
+        while sum_stopped - theta > 0.0000001:
+            if pos_tok >= len(tokens):
                 break
+            (tok, tok_info) = tokens[pos_tok]
+            pos_tok += 1
             
             if tok_info['utility'] == 0: #not qchunk
                 continue

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="pytokenjoin",
-    version="0.1.3",
+    version="0.1.6",
     description="pyTokenJoin is a library containing efficient algorithms that solve the set similarity join problem with maximum weighted bipartite matching.",
     author="Alexandros Zeakis",
     author_email="azeakis@athenarc.gr",

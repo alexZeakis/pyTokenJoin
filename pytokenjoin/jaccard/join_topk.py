@@ -96,9 +96,15 @@ def simjoin(collection1, collection2, k, idx, lengths_list, delta_alg, log):
         t1 = time()
         cands_scores = {}
         ## Starting Candidate Generation ##
-        for pos_tok, (tok, tok_info) in enumerate(tokens):
-            if theta - sum_stopped > 0.0000001:
+#        for pos_tok, (tok, tok_info) in enumerate(tokens):
+#            if theta - sum_stopped > 0.0000001:
+#                break
+        pos_tok = 0
+        while sum_stopped - theta > 0.0000001:
+            if pos_tok >= len(tokens):
                 break
+            (tok, tok_info) = tokens[pos_tok]
+            pos_tok += 1
                 
             sum_stopped -= tok_info['utility']
             
@@ -240,7 +246,7 @@ def simjoin(collection1, collection2, k, idx, lengths_list, delta_alg, log):
                         util_score = min(tok_info['utilities'][minLen], tok_info_S['utilities'][minLen])
                         UB += util_score
             
-                    if pers_delta - total > .0000001:
+                    if pers_delta - UB > .0000001:
                         break
 
                 score = UB / (RLen + SLen - UB)

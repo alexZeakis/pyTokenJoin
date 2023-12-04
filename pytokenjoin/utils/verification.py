@@ -180,6 +180,47 @@ def verification_opt(R_record, S_record, phi, pers_delta, alg):
     score = sumMatching / (orRLen + orSLen - sumMatching)
     return score
     
+def get_lower_bound(R_record, S_record, phi):
+    
+    RLen = len(R_record)
+    SLen = len(S_record)
+    
+    pq = []
+    for nor, r in enumerate(R_record):
+        for nos, s in enumerate(S_record):
+            score = phi(r, s)
+            heapq.heappush(pq, (-score, nor, nos))  #descending order to use pop
+            
+            
+    sumMatching = 0
+    rVertices = set()
+    sVertices = set()
+    while len(rVertices) != RLen :
+        (score, nor, nos) = heapq.heappop(pq)
+        if nor in rVertices: # matched
+            continue
+        if nos in sVertices: # matched
+            continue
+
+        rVertices.add(nor) # mark as matched
+        sVertices.add(nos) # mark as matched
+        sumMatching += -score;
+
+    return sumMatching / (RLen + SLen - sumMatching)
+
+
+def get_upper_bound(R_record, S_record, phi):
+    
+    sumMatching = 0
+    for nor, r in enumerate(R_record):
+        max_r = -1
+        for nos, s in enumerate(S_record):
+            score = phi(r, s)
+            max_r = max(score, max_r)
+        sumMatching += max_r
+    return sumMatching / (len(R_record) + len(S_record) - sumMatching)
+
+
     
 def findMatching(pi, add, hits2):
     # Set<Edge> M = new HashSet<Edge>();
