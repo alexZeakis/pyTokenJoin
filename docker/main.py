@@ -134,8 +134,8 @@ def run(j):
 if __name__ == '__main__':
     if len(sys.argv) != 3:
         raise ValueError("Please provide 2 files.")
-    with open(sys.argv[1]) as o:
+    with open('./logs/'+sys.argv[1]) as o:
         j = json.load(o)
     response = run(j)
-    with open(sys.argv[2], 'w') as o:
+    with open('./logs/'+sys.argv[2], 'w') as o:
         o.write(json.dumps(response, indent=4))
