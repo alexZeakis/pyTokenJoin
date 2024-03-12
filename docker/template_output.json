@@ -1,7 +1,9 @@
 {
     "message": "TokenJoin project executed successfully!",
-    "output": [
-        "s3://XXXXXXXXX-bucket/2824af95-1467-4b0b-b12a-21eba4c3ac0f.csv"
+    "output": [{
+        "path": "s3://XXXXXXXXX-bucket/2824af95-1467-4b0b-b12a-21eba4c3ac0f.csv",
+        "name": "List of joined entities"
+        }
     ],
     "metrics": {
         "no_0": 0,
