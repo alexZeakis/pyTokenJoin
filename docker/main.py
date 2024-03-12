@@ -123,7 +123,7 @@ def run(j):
         object_path = f"s3://{result.bucket_name}/{result.object_name}"
 
         return {'message': 'TokenJoin project executed successfully!',
-                'output': [object_path], 'metrics': log, 'status': 200}
+                'output': [{'name': 'List of joined entities', 'path': object_path}], 'metrics': log, 'status': 200}
     except Exception as e:
         return {
             'message': 'An error occurred during data processing.',
