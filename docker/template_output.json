@@ -1,0 +1,20 @@
+{
+    "message": "TokenJoin project executed successfully!",
+    "output": [
+        "s3://XXXXXXXXX-bucket/2824af95-1467-4b0b-b12a-21eba4c3ac0f.csv"
+    ],
+    "metrics": {
+        "no_0": 0,
+        "init_delta_time": 0.00028777122497558594,
+        "init_time": 0.0034520626068115234,
+        "candgen_time": 0.018812179565429688,
+        "candref_time": 0.010878801345825195,
+        "candver_time": 0.004355669021606445,
+        "no_candgen": 9891,
+        "no_candref": 530,
+        "no_candver": 530,
+        "no_candres": 408,
+        "total_time": 0.4403676986694336
+    },
+    "status": 200
+}

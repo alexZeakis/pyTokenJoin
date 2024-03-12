@@ -258,7 +258,7 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
     # print('Final δ is {:.3f}'.format(delta))
     return output
 
-class EditTokenJoin():
+class TokenJoin():
     
     def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', k=1000, keepLog=False):
         total_time = time()

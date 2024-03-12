@@ -216,7 +216,7 @@ def simjoin(collection1, collection2, delta, idx, lengths_list, jointFilter, pos
         
     return output
 
-class EditTokenJoin():
+class TokenJoin():
     
     #def tokenjoin(left_df, right_df, left_id, right_id, left_join, right_join, left_attr, right_attr, left_prefix='l_', right_prefix='r_'):
     def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', delta=0.7, jointFilter=False, posFilter=False, verification_alg=0, keepLog=False):

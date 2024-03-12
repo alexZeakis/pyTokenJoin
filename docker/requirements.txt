@@ -1,0 +1,2 @@
+pytokenjoin==0.1.7
+minio

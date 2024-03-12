@@ -1,0 +1,26 @@
+{
+    "input": [
+        "s3://XXXXXXXX-bucket/temp1.csv",
+        "s3://XXXXXXXX-bucket/temp2.csv"
+    ],
+    "parameters": {
+        "col_id_left": 1,
+        "col_text_left": 2,
+        "separator_left": " ",
+        "col_id_right": 0,
+        "col_text_right": 1,
+        "separator_right": " ",
+        "k": 1,
+        "delta_alg": "1",
+        "output_file": "out.csv",
+        "method": "knn",
+        "similarity": "jaccard",
+        "foreign": "foreign"
+    },
+    "minio": {
+        "endpoint_url": "minio.XXXXXXXX.gr",
+        "id": "XXXXXXXX",
+        "key": "XXXXXXXX",
+        "bucket": "XXXXXXXX-bucket"
+    }
+}
