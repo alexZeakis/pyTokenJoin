@@ -5,6 +5,7 @@ import json
 import uuid
 import sys
 import importlib
+import traceback
 
 def prep_df(input_file, col_text, separator, minio):
     """
@@ -127,15 +128,15 @@ def run(j):
     except Exception as e:
         return {
             'message': 'An error occurred during data processing.',
-            'error': str(e),
+            'error': traceback.format_exc(),
             'status': 500
         }
     
 if __name__ == '__main__':
     if len(sys.argv) != 3:
         raise ValueError("Please provide 2 files.")
-    with open('./logs/'+sys.argv[1]) as o:
+    with open(sys.argv[1]) as o:
         j = json.load(o)
     response = run(j)
-    with open('./logs/'+sys.argv[2], 'w') as o:
+    with open(sys.argv[2], 'w') as o:
         o.write(json.dumps(response, indent=4))
