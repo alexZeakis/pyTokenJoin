@@ -7,19 +7,19 @@ import sys
 import importlib
 import traceback
 
-def prep_df(input_file, col_text, separator, minio):
+def prep_df(input_file, col_text, col_separator, text_separator, minio):
     """
     Prepare DataFrame from input file.
     """
     if input_file.startswith('s3://'):
         bucket, key = input_file.replace('s3://', '').split('/', 1)
         client = Minio(minio['endpoint_url'], access_key=minio['id'], secret_key=minio['key'])
-        df = pd.read_csv(client.get_object(bucket, key), header=None)
+        df = pd.read_csv(client.get_object(bucket, key), header=None, sep=col_separator, on_bad_lines = 'warn')
     else:
-        df = pd.read_csv(input_file, header=None)
+        df = pd.read_csv(input_file, header=None, sep=col_separator, on_bad_lines = 'warn')
     
     col_text = df.columns[col_text]
-    df[col_text] = df[col_text].str.split(separator)
+    df[col_text] = df[col_text].str.split(text_separator)
     df = df.loc[~(df[col_text].isna())]
     df[col_text] = df[col_text].apply(lambda x: list(set(x)))
     
@@ -49,15 +49,17 @@ def run(j):
             input_file_left = inputs[0]
             col_id_left = j['parameters']['col_id_left']
             col_text_left = j['parameters']['col_text_left']
-            separator_left = j['parameters']['separator_left']        
+            col_separator_left = j['parameters']['col_separator_left']        
+            text_separator_left = j['parameters']['text_separator_left']        
             input_file_right = inputs[1]
             col_id_right = j['parameters']['col_id_right']
             col_text_right = j['parameters']['col_text_right']        
-            separator_right = j['parameters']['separator_right']                
+            col_separator_right = j['parameters']['col_separator_right']                
+            text_separator_right = j['parameters']['text_separator_right']            
             output_file = j['parameters']['output_file']
             
-            df_left = prep_df(input_file_left, col_text_left, separator_left, minio)
-            df_right = prep_df(input_file_right, col_text_right, separator_right, minio)
+            df_left = prep_df(input_file_left, col_text_left, col_separator_left, text_separator_left, minio)
+            df_right = prep_df(input_file_right, col_text_right, col_separator_right, text_separator_right, minio)
             
             if method == 'delta':
                 delta = j['parameters']['delta']     
@@ -89,10 +91,11 @@ def run(j):
             input_file = inputs[0]
             col_id = j['parameters']['col_id']
             col_text = j['parameters']['col_text']
-            separator = j['parameters']['separator']
+            col_separator = j['parameters']['col_separator']
+            text_separator = j['parameters']['text_separator']            
             output_file = j['parameters']['output_file']
             
-            df = prep_df(input_file, col_text, separator, minio)
+            df = prep_df(input_file, col_text, col_separator, text_separator, minio)
             
             if method == 'delta':
                 delta = j['parameters']['delta']     
