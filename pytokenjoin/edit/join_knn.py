@@ -5,6 +5,7 @@ from pytokenjoin.utils.verification import verification, verification_opt, neds
 from pytokenjoin.utils.utils import binary_search, binary_search_dupl
 from pytokenjoin.edit.join_utils import transform_collection, build_stats_for_record, build_index
 import heapq
+from concurrent.futures import ProcessPoolExecutor
 
 def simjoin(collection1, collection2, k, idx, lengths_list, log):
 
@@ -258,6 +259,33 @@ def simjoin(collection1, collection2, k, idx, lengths_list, log):
     # print('Final δ is {:.3f}'.format(delta))
     return output
 
+_LOG_KEYS = ['init_time', 'candgen_time', 'candref_time', 'candver_time',
+             'no_candgen', 'no_candref', 'no_candver', 'no_candres']
+_G = {}
+
+def _init_worker(collection2, idx, lengths_list):
+    _G['c2'], _G['idx'], _G['ll'] = collection2, idx, lengths_list
+
+def _run_chunk(chunk, k):
+    log = {}
+    out = simjoin(chunk, _G['c2'], k, _G['idx'], _G['ll'], log)
+    return out, log
+
+def simjoin_parallel(collection1, collection2, k, idx, lengths_list, log, num_workers):
+    # collection1 holds aligned lists sorted by set size, so interleave to balance the chunks
+    keys = ['collection', 'qcollection', 'words']
+    chunks = [{key: collection1[key][i::num_workers] for key in keys} for i in range(num_workers)]
+    chunks = [c for c in chunks if c['words']]
+    with ProcessPoolExecutor(len(chunks), initializer=_init_worker,
+                             initargs=(collection2, idx, lengths_list)) as ex:
+        res = list(ex.map(_run_chunk, chunks, [k]*len(chunks)))
+    output = []
+    for out, l in res:
+        output += out
+        for key in _LOG_KEYS:
+            log[key] = log.get(key, 0) + l.get(key, 0)
+    return output
+
 class TokenJoin():
     
     def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', k=1000, keepLog=False):
@@ -321,12 +349,16 @@ class TokenJoin():
         self.right_prefix = right_prefix
         
     
-    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', k=1000, keepLog=False):
+    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', k=1000, keepLog=False, num_workers=1):
         log = {}
         left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
         
-        output = simjoin(left_collection, self.right_collection,
-                         k, self.idx, self.lengths_list, log)
+        if num_workers > 1:
+            output = simjoin_parallel(left_collection, self.right_collection,
+                                      k, self.idx, self.lengths_list, log, num_workers)
+        else:
+            output = simjoin(left_collection, self.right_collection,
+                             k, self.idx, self.lengths_list, log)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+left_id, self.right_prefix+self.right_id])
         for col in left_attr+[left_join, left_id]:

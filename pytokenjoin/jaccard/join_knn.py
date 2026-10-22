@@ -6,6 +6,7 @@ from pytokenjoin.utils.verification import jaccard, get_lower_bound, get_upper_b
 from pytokenjoin.utils.utils import binary_search, binary_search_dupl
 from pytokenjoin.jaccard.join_utils import transform_collection, build_stats_for_record, build_index
 import heapq
+from concurrent.futures import ProcessPoolExecutor
 
 
 def delta_init(collection1, collection2, R, tokens, k, idx, 
@@ -787,6 +788,32 @@ def simjoin(collection1, collection2, k, idx, lengths_list, delta_alg, log):
     print('Candidates Generated: {:,}, Refined: {:,}, Verified: {:,}, Survived: {:,}, Final: {:,}'.format(no_candgen, no_candref, no_candver, no_candres, len(output)))
     return output
 
+_LOG_KEYS = ['init_time', 'candgen_time', 'candref_time', 'candver_time',
+             'no_candgen', 'no_candref', 'no_candver', 'no_candres']
+_G = {}
+
+def _init_worker(collection2, idx, lengths_list):
+    _G['c2'], _G['idx'], _G['ll'] = collection2, idx, lengths_list
+
+def _run_chunk(chunk, k, delta_alg):
+    log = {}
+    out = simjoin(chunk, _G['c2'], k, _G['idx'], _G['ll'], delta_alg, log)
+    return out, log
+
+def simjoin_parallel(collection1, collection2, k, idx, lengths_list, delta_alg, log, num_workers):
+    # collection1 is sorted by set size, so interleave to balance the chunks
+    chunks = [collection1[i::num_workers] for i in range(num_workers)]
+    chunks = [c for c in chunks if c]
+    with ProcessPoolExecutor(len(chunks), initializer=_init_worker,
+                             initargs=(collection2, idx, lengths_list)) as ex:
+        res = list(ex.map(_run_chunk, chunks, [k]*len(chunks), [delta_alg]*len(chunks)))
+    output = []
+    for out, l in res:
+        output += out
+        for key in _LOG_KEYS:
+            log[key] = log.get(key, 0) + l.get(key, 0)
+    return output
+
 class TokenJoin():
     
     def tokenjoin_self(self, df, id, join, attr=[], left_prefix='l_', right_prefix='r_', k=1000, delta_alg=0, keepLog=False):
@@ -866,12 +893,16 @@ class TokenJoin():
         self.right_prefix = right_prefix
         
     
-    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', k=1000, delta_alg=0, keepLog=False):
+    def tokenjoin_query(self, left_df, left_id, left_join, left_attr=[], left_prefix='l_', k=1000, delta_alg=0, keepLog=False, num_workers=1):
         log = {}
         left_collection = transform_collection(left_df[left_join].values, self.right_collection['dictionary'])
         
-        output = simjoin(left_collection['collection'], self.right_collection['collection'],
-                         k, self.idx, self.lengths_list, delta_alg, log)
+        if num_workers > 1:
+            output = simjoin_parallel(left_collection['collection'], self.right_collection['collection'],
+                                      k, self.idx, self.lengths_list, delta_alg, log, num_workers)
+        else:
+            output = simjoin(left_collection['collection'], self.right_collection['collection'],
+                             k, self.idx, self.lengths_list, delta_alg, log)
         
         output_df = pd.DataFrame(output, columns=['score', left_prefix+left_id, self.right_prefix+self.right_id])
         for col in left_attr+[left_join, left_id]:
@@ -881,4 +912,4 @@ class TokenJoin():
         
         if keepLog:
             return output_df, log
-        return output_df       
+        return output_df
